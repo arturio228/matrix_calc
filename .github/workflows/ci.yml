@@ -1,0 +1,100 @@
+name: Matrix Calculator Windows and Linux CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows MSVC build and tests
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Record environment
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          cmake --version | Tee-Object evidence/cmake-windows.txt
+          git --version | Tee-Object evidence/git-windows.txt
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Out-File evidence/windows.txt
+      - name: Configure native MSVC
+        shell: pwsh
+        run: |
+          cmake --preset windows-msvc 2>&1 | Tee-Object evidence/configure-windows.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Windows executables
+        shell: pwsh
+        run: |
+          cmake --build --preset windows-msvc --parallel 2 2>&1 | Tee-Object evidence/build-windows.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run Windows tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build-msvc -C Debug --verbose --output-on-failure 2>&1 | Tee-Object evidence/ctest-windows.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run Windows application
+        shell: pwsh
+        run: |
+          ./build-msvc/Debug/matrix_calculator.exe 2>&1 | Tee-Object evidence/app-windows.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload Windows executables and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-executables-and-logs
+          path: |
+            build-msvc/Debug/matrix_calculator.exe
+            build-msvc/tests/Debug/matrix_tests.exe
+            build-msvc/tests/Debug/matrix_smoke.exe
+            evidence
+          if-no-files-found: warn
+
+  linux-container:
+    name: Linux Valgrind Doxygen and Docker
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libgtest-dev doxygen graphviz valgrind clang-format
+          mkdir -p evidence
+      - name: Check formatting
+        run: find include src tests -type f \( -name '*.h' -o -name '*.cpp' \) -print0 | xargs -0 clang-format --dry-run --Werror
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug 2>&1 | tee evidence/configure-linux.txt
+      - name: Build
+        run: cmake --build build --parallel 2 2>&1 | tee evidence/build-linux.txt
+      - name: Run tests
+        run: ctest --test-dir build --verbose --output-on-failure 2>&1 | tee evidence/ctest-linux.txt
+      - name: Check test memory with Valgrind
+        run: valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=all --error-exitcode=1 ./build/tests/matrix_tests 2>&1 | tee evidence/valgrind-tests.txt
+      - name: Check application memory with Valgrind
+        run: valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=all --error-exitcode=1 ./build/matrix_calculator 2>&1 | tee evidence/valgrind-app.txt
+      - name: Generate documentation
+        run: doxygen Doxyfile 2>&1 | tee evidence/doxygen-linux.txt
+      - name: Build Docker image
+        run: docker build --progress=plain -t matrix-calculator:ci . 2>&1 | tee evidence/docker-build.txt
+      - name: Run Docker container
+        run: docker run --rm matrix-calculator:ci 2>&1 | tee evidence/docker-run.txt
+      - name: Upload documentation and Linux logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-docs-and-logs
+          path: |
+            docs/html
+            evidence
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
