@@ -1,6 +1,6 @@
 FROM ubuntu:22.04 AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cmake g++ libgtest-dev valgrind doxygen graphviz && rm -rf /var/lib/apt/lists/*
+    cmake make g++ libgtest-dev valgrind doxygen graphviz && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . .
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
