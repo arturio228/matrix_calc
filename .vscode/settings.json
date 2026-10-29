@@ -1,0 +1,4 @@
+{
+  "files.encoding": "utf8",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+}

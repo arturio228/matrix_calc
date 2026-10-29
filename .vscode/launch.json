@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Matrix Calculator Windows",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/matrix_calculator.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build",
+      "terminal": "integrated"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+.git
+.github
+.vscode
+build*
+docs/html
+docs/latex
+*.exe
+*.o
+*.obj
+*.log
